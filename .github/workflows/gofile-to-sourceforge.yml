@@ -25,29 +25,20 @@ jobs:
         run: |
           echo "Downloading from Gofile..."
           curl -LJO "${{ github.event.inputs.gofile_url }}"
-
           echo "Downloaded files:"
           ls -lh
 
-          FILE_NAME=$(ls *.zip | head -n 1 || true)
-
-          if [ -z "$FILE_NAME" ]; then
-            echo "ERROR: No ZIP file downloaded!"
-            exit 1
-          fi
-
-          echo "Detected file: $FILE_NAME"
+          # Capture the exact filename downloaded
+          FILE_NAME=$(ls *.zip | head -n 1)
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
 
       - name: Upload to SourceForge (dynamic folder)
         run: |
-          echo "Uploading ${{ env.FILE_NAME }} to folder: ${{ github.event.inputs.sf_folder }}"
+          echo "Uploading $FILE_NAME to SourceForge folder: ${{ github.event.inputs.sf_folder }}"
 
           sshpass -p "${{ secrets.SF_PASSWORD }}" sftp -o StrictHostKeyChecking=no \
           ${{ secrets.SF_USER }}@frs.sourceforge.net <<EOF
-          cd /home/frs/project/munch-roms
-          mkdir -p "${{ github.event.inputs.sf_folder }}"
-          cd "${{ github.event.inputs.sf_folder }}"
-          put "${{ env.FILE_NAME }}"
+          cd /home/frs/project/${{ secrets.SF_PROJECT }}/${{ github.event.inputs.sf_folder }}
+          put $FILE_NAME
           bye
           EOF
