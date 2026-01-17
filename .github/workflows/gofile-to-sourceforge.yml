@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       gofile_url:
-        description: "Direct Gofile download link"
+        description: "Gofile share link (can include /web/)"
         required: true
 
       sf_folder:
-        description: "SourceForge folder name (e.g. Lunaris-AOSP, Bliss-AOSP, etc.)"
+        description: "SourceForge folder name (e.g. Lunaris-AOSP)"
         required: true
 
 jobs:
@@ -19,23 +19,35 @@ jobs:
       - name: Install tools
         run: |
           sudo apt update
-          sudo apt install -y wget sshpass
+          sudo apt install -y wget sshpass grep
 
-      - name: Download ROM (wget + /web/ fix)
+      - name: Download ROM (Gofile web-scrape → real link)
         run: |
-          echo "Downloading from Gofile using wget..."
+          echo "Fetching Gofile page to extract real link..."
 
-          # Convert /download/web/ link to real direct link
-          DIRECT_URL=$(echo "${{ github.event.inputs.gofile_url }}" | sed 's/\/download\/web\//\/download\//')
-          echo "Using direct URL: $DIRECT_URL"
+          # Step 1: Fetch the Gofile webpage
+          PAGE_HTML=$(curl -s "${{ github.event.inputs.gofile_url }}")
+
+          # Step 2: Extract the REAL storage URL from the page
+          REAL_URL=$(echo "$PAGE_HTML" | grep -oP 'https://store[^"]+\.zip' | head -n 1)
+
+          echo "Resolved real storage URL:"
+          echo "$REAL_URL"
+
+          if [ -z "$REAL_URL" ]; then
+            echo "ERROR: Could not extract real Gofile download link!"
+            exit 1
+          fi
+
+          echo "Downloading real file using wget..."
 
           wget \
             --header="User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
             --header="Referer: https://gofile.io/" \
             --content-disposition \
-            --tries=5 \
-            --timeout=30 \
-            "$DIRECT_URL"
+            --tries=10 \
+            --timeout=60 \
+            "$REAL_URL"
 
           echo "Downloaded files:"
           ls -lh
@@ -47,12 +59,12 @@ jobs:
             exit 1
           fi
 
-          # Safety check — must be > 1GB (real ROM)
+          # 🔒 Safety check — must be > 1GB (real ROM)
           FILE_SIZE=$(stat -c%s "$FILE_NAME")
           echo "Downloaded size: $FILE_SIZE bytes"
 
           if [ "$FILE_SIZE" -lt 1073741824 ]; then
-            echo "ERROR: File too small — likely not the real ROM!"
+            echo "ERROR: File too small — likely fake download!"
             exit 1
           fi
 
