@@ -19,17 +19,35 @@ jobs:
       - name: Install tools
         run: |
           sudo apt update
-          sudo apt install -y curl sshpass
+          sudo apt install -y aria2 sshpass
 
       - name: Download ROM (preserve original filename)
         run: |
-          echo "Downloading from Gofile..."
-          curl -LJO "${{ github.event.inputs.gofile_url }}"
+          echo "Downloading from Gofile using aria2..."
+
+          aria2c \
+            --max-connection-per-server=16 \
+            --split=16 \
+            --min-split-size=5M \
+            --file-allocation=trunc \
+            --retry-wait=10 \
+            --retry=5 \
+            --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            --referer="https://gofile.io/" \
+            "${{ github.event.inputs.gofile_url }}"
+
           echo "Downloaded files:"
           ls -lh
 
           # Capture the exact filename downloaded
-          FILE_NAME=$(ls *.zip | head -n 1)
+          FILE_NAME=$(ls *.zip | head -n 1 || true)
+
+          if [ -z "$FILE_NAME" ]; then
+            echo "ERROR: No ZIP file downloaded!"
+            exit 1
+          fi
+
+          echo "Detected file: $FILE_NAME"
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
 
       - name: Upload to SourceForge (dynamic folder)
