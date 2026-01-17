@@ -26,11 +26,29 @@ jobs:
         run: |
           echo "Downloading from Google Drive..."
 
-          # Convert share link to file ID
-          FILE_ID=$(echo "${{ github.event.inputs.gdrive_url }}" | sed -E 's/.*\/d\/(.*)\/.*/\1/')
-          echo "Extracted File ID: $FILE_ID"
+          RAW_URL="${{ github.event.inputs.gdrive_url }}"
+          echo "Raw input URL: $RAW_URL"
 
-          gdown "https://drive.google.com/uc?id=$FILE_ID"
+          # ---- Proper File ID extraction ----
+
+          # Try /d/ style link first
+          FILE_ID=$(echo "$RAW_URL" | sed -E 's#.*/d/([^/]+).*#\1#')
+
+          # If still not extracted, try id= format
+          if [ "$FILE_ID" = "$RAW_URL" ]; then
+            FILE_ID=$(echo "$RAW_URL" | sed -E 's/.*id=([^&]+).*/\1/')
+          fi
+
+          echo "Final extracted File ID: $FILE_ID"
+
+          if [ -z "$FILE_ID" ]; then
+            echo "ERROR: Could not extract Google Drive File ID!"
+            exit 1
+          fi
+
+          # ---- Download with confirmation bypass ----
+          echo "Starting gdown download..."
+          gdown "https://drive.google.com/uc?id=$FILE_ID&confirm=t" --fuzzy
 
           echo "Downloaded files:"
           ls -lh
