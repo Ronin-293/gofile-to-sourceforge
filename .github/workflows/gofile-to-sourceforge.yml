@@ -1,12 +1,36 @@
-- name: Download ROM (preserve original filename)
-  run: |
+name: Mirror Gofile to SourceForge
+
+on:
+  workflow_dispatch:
+    inputs:
+      gofile_url:
+        description: "Direct Gofile download link"
+        required: true
+
+      sf_folder:
+        description: "SourceForge folder name (e.g. Lunaris-AOSP, Bliss-AOSP, etc.)"
+        required: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y curl sshpass
+
+      - name: Download ROM (preserve original filename)
+        run: |
           echo "Downloading from Gofile..."
           curl -LJO "${{ github.event.inputs.gofile_url }}"
 
-          echo "Files in workspace:"
+          echo "Downloaded files:"
           ls -lh
 
-          FILE_NAME=$(ls *.zip | head -n 1)
+          FILE_NAME=$(ls *.zip | head -n 1 || true)
+
           if [ -z "$FILE_NAME" ]; then
             echo "ERROR: No ZIP file downloaded!"
             exit 1
@@ -15,15 +39,15 @@
           echo "Detected file: $FILE_NAME"
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
 
- - name: Upload to SourceForge (safe path + auto folder)
-   run: |
-          echo "Uploading $FILE_NAME to SourceForge folder: ${{ github.event.inputs.sf_folder }}"
+      - name: Upload to SourceForge (dynamic folder)
+        run: |
+          echo "Uploading ${{ env.FILE_NAME }} to folder: ${{ github.event.inputs.sf_folder }}"
 
           sshpass -p "${{ secrets.SF_PASSWORD }}" sftp -o StrictHostKeyChecking=no \
           ${{ secrets.SF_USER }}@frs.sourceforge.net <<EOF
-          cd /home/frs/project/Munch\ roms
-          mkdir ${{ github.event.inputs.sf_folder }}
-          cd ${{ github.event.inputs.sf_folder }}
-          put "$FILE_NAME"
+          cd "/home/frs/project/Munch roms"
+          mkdir -p "${{ github.event.inputs.sf_folder }}"
+          cd "${{ github.event.inputs.sf_folder }}"
+          put "${{ env.FILE_NAME }}"
           bye
           EOF
