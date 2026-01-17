@@ -1,5 +1,5 @@
 - name: Download ROM (preserve original filename)
-        run: |
+  run: |
           echo "Downloading from Gofile..."
           curl -LJO "${{ github.event.inputs.gofile_url }}"
 
@@ -15,8 +15,8 @@
           echo "Detected file: $FILE_NAME"
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
 
-      - name: Upload to SourceForge (safe path + auto folder)
-        run: |
+ - name: Upload to SourceForge (safe path + auto folder)
+   run: |
           echo "Uploading $FILE_NAME to SourceForge folder: ${{ github.event.inputs.sf_folder }}"
 
           sshpass -p "${{ secrets.SF_PASSWORD }}" sftp -o StrictHostKeyChecking=no \
