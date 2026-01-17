@@ -21,21 +21,23 @@ jobs:
           sudo apt update
           sudo apt install -y wget sshpass grep
 
-      - name: Download ROM (Gofile web-scrape → real link)
+      - name: Download ROM (Correct Gofile scrape → real link)
         run: |
           echo "Fetching Gofile page to extract real link..."
 
-          # Step 1: Fetch the Gofile webpage
+          # Step 1: Fetch the gofile.io/d/... page (this contains the REAL link)
           PAGE_HTML=$(curl -s "${{ github.event.inputs.gofile_url }}")
 
-          # Step 2: Extract the REAL storage URL from the page
-          REAL_URL=$(echo "$PAGE_HTML" | grep -oP 'https://store[^"]+\.zip' | head -n 1)
+          # Step 2: Extract REAL storage URL (WITHOUT /web/)
+          REAL_URL=$(echo "$PAGE_HTML" | grep -oP 'https://store[^"]+/download/[^"]+\.zip' | head -n 1)
 
           echo "Resolved real storage URL:"
           echo "$REAL_URL"
 
           if [ -z "$REAL_URL" ]; then
             echo "ERROR: Could not extract real Gofile download link!"
+            echo "Debug: First 500 chars of page:"
+            echo "$PAGE_HTML" | head -c 500
             exit 1
           fi
 
@@ -59,7 +61,7 @@ jobs:
             exit 1
           fi
 
-          # 🔒 Safety check — must be > 1GB (real ROM)
+          # Safety check — must be > 1GB (real ROM)
           FILE_SIZE=$(stat -c%s "$FILE_NAME")
           echo "Downloaded size: $FILE_SIZE bytes"
 
