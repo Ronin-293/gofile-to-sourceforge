@@ -45,7 +45,7 @@ jobs:
 
           sshpass -p "${{ secrets.SF_PASSWORD }}" sftp -o StrictHostKeyChecking=no \
           ${{ secrets.SF_USER }}@frs.sourceforge.net <<EOF
-          cd "/home/frs/project/Munch roms"
+          cd /home/frs/project/munch-roms
           mkdir -p "${{ github.event.inputs.sf_folder }}"
           cd "${{ github.event.inputs.sf_folder }}"
           put "${{ env.FILE_NAME }}"
