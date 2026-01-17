@@ -19,37 +19,23 @@ jobs:
       - name: Install tools
         run: |
           sudo apt update
-          sudo apt install -y aria2 sshpass jq
+          sudo apt install -y wget sshpass
 
-      - name: Download ROM (Gofile API → real link → aria2)
+      - name: Download ROM (wget + /web/ fix)
         run: |
-          echo "Resolving real Gofile download link via API..."
+          echo "Downloading from Gofile using wget..."
 
-          # Extract content ID from your link
-          CONTENT_ID=$(echo "${{ github.event.inputs.gofile_url }}" | sed -E 's#.*/([a-f0-9-]+-[a-f0-9-]+-[a-f0-9-]+-[a-f0-9-]+-[a-f0-9-]+)/.*#\1#')
-          echo "Content ID: $CONTENT_ID"
+          # Convert /download/web/ link to real direct link
+          DIRECT_URL=$(echo "${{ github.event.inputs.gofile_url }}" | sed 's/\/download\/web\//\/download\//')
+          echo "Using direct URL: $DIRECT_URL"
 
-          # Fetch REAL storage URL from Gofile API
-          API_JSON=$(curl -s "https://api.gofile.io/getContent?contentId=$CONTENT_ID")
-          REAL_URL=$(echo "$API_JSON" | jq -r '.data.contents[].link')
-
-          echo "Resolved real storage URL:"
-          echo "$REAL_URL"
-
-          echo "Downloading real file using aria2..."
-
-          aria2c \
-            --max-connection-per-server=16 \
-            --split=16 \
-            --min-split-size=5M \
-            --file-allocation=trunc \
-            --retry-wait=10 \
-            --retry=5 \
-            --user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-            --referer="https://gofile.io/" \
-            --auto-file-renaming=false \
-            -o "$(basename "$REAL_URL")" \
-            "$REAL_URL"
+          wget \
+            --header="User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            --header="Referer: https://gofile.io/" \
+            --content-disposition \
+            --tries=5 \
+            --timeout=30 \
+            "$DIRECT_URL"
 
           echo "Downloaded files:"
           ls -lh
@@ -66,7 +52,7 @@ jobs:
           echo "Downloaded size: $FILE_SIZE bytes"
 
           if [ "$FILE_SIZE" -lt 1073741824 ]; then
-            echo "ERROR: File too small — still not the real ROM!"
+            echo "ERROR: File too small — likely not the real ROM!"
             exit 1
           fi
 
