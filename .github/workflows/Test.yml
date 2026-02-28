@@ -1,0 +1,89 @@
+name: Mirror Google Drive to SourceForge
+
+on:
+  workflow_dispatch:
+    inputs:
+      gdrive_url:
+        description: "Google Drive share link OR Direct mirror link"
+        required: true
+
+      sf_folder:
+        description: "SourceForge folder name (e.g. Lunaris-AOSP)"
+        required: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y python3-pip sshpass wget
+          pip3 install gdown
+
+      - name: Download ROM (GDrive or Mirror)
+        run: |
+          echo "Downloading..."
+
+          RAW_URL="${{ github.event.inputs.gdrive_url }}"
+          echo "Input URL: $RAW_URL"
+
+          # ---- Check if Google Drive link ----
+          if echo "$RAW_URL" | grep -q "drive.google.com"; then
+            echo "Detected Google Drive link"
+
+            # Extract File ID
+            FILE_ID=$(echo "$RAW_URL" | sed -E 's#.*/d/([^/]+).*#\1#')
+
+            if [ "$FILE_ID" = "$RAW_URL" ]; then
+              FILE_ID=$(echo "$RAW_URL" | sed -E 's/.*id=([^&]+).*/\1/')
+            fi
+
+            echo "Extracted File ID: $FILE_ID"
+
+            if [ -z "$FILE_ID" ]; then
+              echo "ERROR: Could not extract Google Drive File ID!"
+              exit 1
+            fi
+
+            gdown "https://drive.google.com/uc?id=$FILE_ID&confirm=t" --fuzzy
+
+          else
+            echo "Detected Direct Mirror Link"
+
+            # Direct download using wget (resume supported)
+            wget -c --content-disposition "$RAW_URL"
+          fi
+
+          echo "Downloaded files:"
+          ls -lh
+
+          FILE_NAME=$(ls *.zip 2>/dev/null | head -n 1 || true)
+
+          if [ -z "$FILE_NAME" ]; then
+            echo "ERROR: No ZIP file downloaded!"
+            exit 1
+          fi
+
+          FILE_SIZE=$(stat -c%s "$FILE_NAME")
+          echo "Downloaded size: $FILE_SIZE bytes"
+
+          if [ "$FILE_SIZE" -lt 1073741824 ]; then
+            echo "ERROR: File too small — likely wrong download!"
+            exit 1
+          fi
+
+          echo "Detected file: $FILE_NAME"
+          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
+
+      - name: Upload to SourceForge
+        run: |
+          echo "Uploading ${{ env.FILE_NAME }} to folder: ${{ github.event.inputs.sf_folder }}"
+
+          sshpass -p "${{ secrets.SF_PASSWORD }}" sftp -o StrictHostKeyChecking=no \
+          ${{ secrets.SF_USER }}@frs.sourceforge.net <<EOF
+          cd /home/frs/project/${{ secrets.SF_PROJECT }}/${{ github.event.inputs.sf_folder }}
+          put "${{ env.FILE_NAME }}"
+          bye
+          EOF
